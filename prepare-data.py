@@ -79,7 +79,7 @@ df[GRADING_DATE] = df[GRADING_DATE].dt.strftime("%Y-%m-%d")
 # %% Add semester column
 def get_semester(value: str) -> str:
     date = pd.to_datetime(value, format="%Y-%m-%d")
-    semester = "Fall" if date.month >= 8 else "Spring"
+    semester = "Fall" if date.month <= 4 or date.month >= 10 else "Spring"
     return f"{semester} {date.year}"
 
 
