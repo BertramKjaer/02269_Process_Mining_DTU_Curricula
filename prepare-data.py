@@ -21,8 +21,13 @@ import pandas as pd
 df = pd.read_csv(INPUT_PATH, sep=";")
 
 # %% Keep only students who study "Softwareteknologi, ing.prof.bach."
-# df = df[df[EDUCATION] == "Softwareteknologi, ing.prof.bach."]
-# df.drop(columns=[EDUCATION], inplace=True)
+df = df[df[EDUCATION] == "Softwareteknologi, ing.prof.bach."]
+df.drop(columns=[EDUCATION], inplace=True)
+
+# %% Remove all rows with study numbers that only has two or fewer courses
+course_counts = df[STUDY_NUMBER].value_counts()
+valid_study_numbers = course_counts[course_counts > 2].index
+df = df[df[STUDY_NUMBER].isin(valid_study_numbers)]
 
 # %% Remove all rows with study numbers that has courses with "institut" in the course text
 institute_study_numbers = df.loc[
@@ -85,8 +90,30 @@ def get_semester(value: str) -> str:
 
 df["SEMESTER"] = df[GRADING_DATE].apply(get_semester)
 
+
+# %% Set the grading date of courses in the same semester to the same date
+def set_semester_grading_dates(group: pd.DataFrame) -> pd.DataFrame:
+    semester = group["SEMESTER"].iloc[0]
+    year = pd.to_datetime(group[GRADING_DATE]).dt.year
+    if "Spring" in semester:
+        new_date = pd.Timestamp(year=year.iloc[0], month=6, day=1)
+    else:
+        new_date = pd.Timestamp(year=year.iloc[0], month=12, day=1)
+
+    group["SEMESTER_END"] = new_date.strftime("%Y-%m-%d")
+    return group
+
+
+df = df.groupby([STUDY_NUMBER, "SEMESTER"]).apply(set_semester_grading_dates)
+df.reset_index(drop=True, inplace=True)
+
+
+# %% Add attempt counter column
+
+df["ATTEMPT"] = df.groupby([STUDY_NUMBER, COURSE_NUMBER]).cumcount() + 1
+
 # %% Sort data
-df.sort_values(by=[STUDY_NUMBER, GRADING_DATE, COURSE_NUMBER], inplace=True)
+df.sort_values(by=[STUDY_NUMBER, COURSE_NUMBER, "SEMESTER_END"], inplace=True)
 
 # %% Export data
 df.to_csv(OUTPUT_PATH, index=False)
