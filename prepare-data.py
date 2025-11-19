@@ -72,7 +72,7 @@ if len(duplicate_keys) > 0:
 # df = df[~df[STUDY_NUMBER].isin(failed_study_numbers)]
 
 # %% Convert grading dates to sortable ISO 8601
-df[GRADING_DATE] = pd.to_datetime(df[GRADING_DATE], format="%d-%m-%Y", errors="coerce")
+df[GRADING_DATE] = pd.to_datetime(df[GRADING_DATE], format="%d/%m/%Y")
 df[GRADING_DATE] = df[GRADING_DATE].dt.strftime("%Y-%m-%d")
 
 
