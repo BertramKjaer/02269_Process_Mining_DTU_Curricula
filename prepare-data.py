@@ -107,13 +107,85 @@ def set_semester_grading_dates(group: pd.DataFrame) -> pd.DataFrame:
 df = df.groupby([STUDY_NUMBER, "SEMESTER"]).apply(set_semester_grading_dates)
 df.reset_index(drop=True, inplace=True)
 
+# %% Add semester start date column
+
+
+def get_semester_start(value: str) -> str:
+    date = pd.to_datetime(value, format="%Y-%m-%d")
+    if date.month == 6:
+        start_date = pd.Timestamp(year=date.year, month=2, day=1)
+    else:
+        start_date = pd.Timestamp(year=date.year, month=8, day=1)
+    return start_date.strftime("%Y-%m-%d")
+
+
+df["SEMESTER_START"] = df["SEMESTER_END"].apply(get_semester_start)
+
 
 # %% Add attempt counter column
 
 df["ATTEMPT"] = df.groupby([STUDY_NUMBER, COURSE_NUMBER]).cumcount() + 1
 
+
+# %% Combine courses with attempts into single rows with later end-dates
+# Convert semester start/end to datetime so min/max aggregation is chronological
+df["SEMESTER_START"] = pd.to_datetime(df["SEMESTER_START"], format="%Y-%m-%d")
+df["SEMESTER_END"] = pd.to_datetime(df["SEMESTER_END"], format="%Y-%m-%d")
+
+aggregation_functions = {
+    COURSE_TEXT: "first",
+    GRADE: "last",
+    GRADING_SCALE: "first",
+    ECTS: "first",
+    EXAM_FORM: "first",
+    CENSOR: "first",
+    # Keep semester listing as joined string; ordering depends on original row order
+    "SEMESTER": lambda x: ", ".join(x),
+    # Use min/max on datetimes so start is earliest and end is latest
+    "SEMESTER_START": "min",
+    "SEMESTER_END": "max",
+    # ATTEMPT should reflect the highest attempt number
+    "ATTEMPT": "max",
+}
+
+df = df.groupby([STUDY_NUMBER, COURSE_NUMBER], as_index=False).agg(aggregation_functions)
+
+# After aggregation, convert semester start/end back to ISO date strings
+df["SEMESTER_START"] = pd.to_datetime(df["SEMESTER_START"]).dt.strftime("%Y-%m-%d")
+df["SEMESTER_END"] = pd.to_datetime(df["SEMESTER_END"]).dt.strftime("%Y-%m-%d")
+
+
+# %% Add duration column
+def calculate_duration(row: pd.Series) -> int:
+    start_date = pd.to_datetime(row["SEMESTER_START"], format="%Y-%m-%d")
+    end_date = pd.to_datetime(row["SEMESTER_END"], format="%Y-%m-%d")
+    duration = (end_date - start_date).days
+    return duration
+
+
+df["DURATION_DAYS"] = df.apply(calculate_duration, axis=1)
+
+# %% Reorder columns
+
+desired_order = [
+    STUDY_NUMBER,
+    COURSE_NUMBER,
+    COURSE_TEXT,
+    GRADE,
+    GRADING_SCALE,
+    ECTS,
+    EXAM_FORM,
+    CENSOR,
+    "SEMESTER",
+    "SEMESTER_START",
+    "SEMESTER_END",
+    "DURATION_DAYS",
+    "ATTEMPT",
+]
+df = df[desired_order]
+
 # %% Sort data
-df.sort_values(by=[STUDY_NUMBER, COURSE_NUMBER, "SEMESTER_END"], inplace=True)
+df.sort_values(by=[STUDY_NUMBER, "SEMESTER_END", COURSE_NUMBER], inplace=True)
 
 # %% Export data
 df.to_csv(OUTPUT_PATH, index=False)
