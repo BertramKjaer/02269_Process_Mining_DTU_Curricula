@@ -127,7 +127,7 @@ df["SEMESTER_START"] = df["SEMESTER_END"].apply(get_semester_start)
 df["ATTEMPT"] = df.groupby([STUDY_NUMBER, COURSE_NUMBER]).cumcount() + 1
 
 
-# %% Combine courses with attempts into single rows with later end-dates
+# %% Combine courses with attempts into single rows with adjusted end dates based on number of attempts
 # Convert semester start/end to datetime so min/max aggregation is chronological
 df["SEMESTER_START"] = pd.to_datetime(df["SEMESTER_START"], format="%Y-%m-%d")
 df["SEMESTER_END"] = pd.to_datetime(df["SEMESTER_END"], format="%Y-%m-%d")
@@ -150,9 +150,12 @@ aggregation_functions = {
 
 df = df.groupby([STUDY_NUMBER, COURSE_NUMBER], as_index=False).agg(aggregation_functions)
 
-# After aggregation, convert semester start/end back to ISO date strings
+# Calculate end date based on semester start and number of attempts (one semester is 13 weeks)
+df["SEMESTER_END"] = df["SEMESTER_START"] + pd.to_timedelta(df["ATTEMPT"] * 13 * 7, unit="days")
+
+# After aggregation and adjustment, convert semester start/end back to ISO date strings
 df["SEMESTER_START"] = pd.to_datetime(df["SEMESTER_START"]).dt.strftime("%Y-%m-%d")
-df["SEMESTER_END"] = pd.to_datetime(df["SEMESTER_END"]).dt.strftime("%Y-%m-%d")
+df["SEMESTER_END"] = df["SEMESTER_END"].dt.strftime("%Y-%m-%d")
 
 
 # %% Add duration column
