@@ -6,6 +6,8 @@ This script applies the Inductive Miner algorithm to discover a process model
 from DTU student course completion data.
 """
 
+import os
+import argparse
 import pandas as pd
 import pm4py
 from pm4py.algo.discovery.inductive import algorithm as inductive_miner
@@ -17,8 +19,8 @@ from pm4py.visualization.petri_net import visualizer as pn_visualizer
 
 # Constants
 INPUT_PATH = "DTU_Curricula_Data_Filtered.csv"
-OUTPUT_PETRI_NET_PATH = "inductive_miner_petri_net.pnml"
-OUTPUT_VISUALIZATION_PATH = "inductive_miner_model.png"
+OUTPUT_PETRI_NET_PATH = "outputs/inductive_miner_petri_net.pnml"
+OUTPUT_VISUALIZATION_PATH = "outputs/inductive_miner_model.png"
 
 def load_event_log(file_path: str) -> pd.DataFrame:
     """Load and prepare the event log from CSV file."""
@@ -106,6 +108,16 @@ def discover_model_inductive(log_df: pd.DataFrame, noise_threshold: float = 0.0)
     
     return net, initial_marking, final_marking
 
+
+def build_argparser():
+    p = argparse.ArgumentParser(description='Inductive Miner wrapper using pm4py')
+    p.add_argument('--input', '-i', default=INPUT_PATH, help='Path to filtered CSV file')
+    p.add_argument('--out', '-o', default='outputs', help='Output directory for PNML/PNG')
+    p.add_argument('--noise', type=float, default=0.0, help='Noise threshold for Inductive Miner')
+    p.add_argument('--sample', type=int, default=None, help='Sample this many cases (to reduce runtime)')
+    p.add_argument('--top-activities', type=int, default=None, help='Keep only top-N frequent activities')
+    return p
+
 def visualize_model(net, initial_marking, final_marking, output_path: str):
     """Visualize the discovered Petri net and save to file."""
     print(f"\nVisualizing model and saving to {output_path}...")
@@ -144,18 +156,38 @@ def main():
     print("=" * 60)
     print("DTU Curricula - Inductive Miner Process Discovery")
     print("=" * 60)
-    
+    parser = build_argparser()
+    args = parser.parse_args()
+
+    # Ensure outputs directory exists
+    os.makedirs(args.out, exist_ok=True)
+
     # Load data
-    df = load_event_log(INPUT_PATH)
-    
+    df = load_event_log(args.input)
+
+    # Optionally sample and filter activities before preparing
+    if args.sample is not None:
+        unique_cases = df['STUDIENR'].unique()
+        if len(unique_cases) > args.sample:
+            sampled = pd.Series(unique_cases).sample(n=args.sample, random_state=1).tolist()
+            df = df[df['STUDIENR'].isin(sampled)]
+            print(f"Sampled {args.sample} cases (reduced from {len(unique_cases)}).")
+
+    if args.top_activities is not None:
+        before = df['KURSTXT'].nunique()
+        top = df['KURSTXT'].value_counts().nlargest(args.top_activities).index.tolist()
+        df = df[df['KURSTXT'].isin(top)]
+        after = df['KURSTXT'].nunique()
+        print(f"Filtered activities: kept top {after} of {before} activities by frequency.")
+
     # Prepare event log
     log_df = prepare_event_log(df)
     
     # Discover model using Inductive Miner
     # Adjust noise_threshold as needed (0.0 = strict, 0.2 = moderate filtering)
     net, initial_marking, final_marking = discover_model_inductive(
-        log_df, 
-        noise_threshold=0.0
+        log_df,
+        noise_threshold=args.noise
     )
     
     # Warn about large models
@@ -164,15 +196,18 @@ def main():
         print("Visualization may take several minutes. Please be patient...")
     
     # Visualize and save the model
-    visualize_model(net, initial_marking, final_marking, OUTPUT_VISUALIZATION_PATH)
-    
+    vis_path = os.path.join(args.out, os.path.basename(OUTPUT_VISUALIZATION_PATH))
+    pnml_path = os.path.join(args.out, os.path.basename(OUTPUT_PETRI_NET_PATH))
+
+    visualize_model(net, initial_marking, final_marking, vis_path)
+
     # Export Petri net (this is fast even for large models)
-    export_petri_net(net, initial_marking, final_marking, OUTPUT_PETRI_NET_PATH)
+    export_petri_net(net, initial_marking, final_marking, pnml_path)
     
     print("\n" + "=" * 60)
     print("Process discovery completed successfully!")
-    print(f"Visualization: {OUTPUT_VISUALIZATION_PATH}")
-    print(f"Petri Net PNML: {OUTPUT_PETRI_NET_PATH}")
+    print(f"Visualization: {vis_path}")
+    print(f"Petri Net PNML: {pnml_path}")
     print("=" * 60)
 
 if __name__ == "__main__":

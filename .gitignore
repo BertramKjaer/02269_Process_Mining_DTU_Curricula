@@ -205,7 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-outputs/alpha_petrinet.pnml
-outputs/alpha_petrinet.png
+
+# Outputs
+outputs/
+outputs/*
+.outputs/
 DTU_Curricula_Data_Filtered.csv
-obligatory_presence_summary.csv

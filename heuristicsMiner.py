@@ -18,8 +18,8 @@ from pm4py.visualization.petri_net import visualizer as pn_visualizer
 
 # Constants
 INPUT_PATH = "DTU_Curricula_Data_Filtered.csv"
-OUTPUT_HEURISTICS_NET_PATH = "heuristics_miner_model.png"
-OUTPUT_PETRI_NET_PATH = "heuristics_miner_petri_net.png"
+OUTPUT_HEURISTICS_NET_PATH = "outputs/heuristics_miner_model.png"
+OUTPUT_PETRI_NET_PATH = "outputs/heuristics_miner_petri_net.png"
 
 def load_event_log(file_path: str) -> pd.DataFrame:
     """Load and prepare the event log from CSV file."""
@@ -67,7 +67,7 @@ def prepare_event_log(df: pd.DataFrame) -> pd.DataFrame:
     return log_df
 
 def discover_model_heuristics(log_df: pd.DataFrame, 
-                               dependency_threshold: float = 0.5,
+                               dependency_threshold: float = 0.8,
                                and_threshold: float = 0.65,
                                loop_two_threshold: float = 0.5):
     """

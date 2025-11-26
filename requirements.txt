@@ -3,3 +3,4 @@ ipykernel
 unidecode
 pm4py
 graphviz
+matplotlib
