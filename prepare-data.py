@@ -23,18 +23,7 @@ df = pd.read_csv(INPUT_PATH, sep=";")
 # %% Keep only students who study "Softwareteknologi, ing.prof.bach."
 df = df[df[EDUCATION] == "Softwareteknologi, ing.prof.bach."]
 df.drop(columns=[EDUCATION], inplace=True)
-
-# %% Remove all rows with study numbers that only has two or fewer courses
-course_counts = df[STUDY_NUMBER].value_counts()
-valid_study_numbers = course_counts[course_counts > 2].index
-df = df[df[STUDY_NUMBER].isin(valid_study_numbers)]
-
-# %% Remove all rows with study numbers that has courses with "institut" in the course text
-institute_study_numbers = df.loc[
-    df[COURSE_TEXT].str.contains("institut", regex=False, na=False, case=False),
-    STUDY_NUMBER,
-].unique()
-df = df[~df[STUDY_NUMBER].isin(institute_study_numbers)]
+print(f"Students after education filter: {df[STUDY_NUMBER].nunique()}")
 
 # %% Standardize course text by converting to uppercase and removing whitespace, diacritics and leading course number
 import re
@@ -51,6 +40,32 @@ def normalize_text(text: str) -> str:
 
 
 df[COURSE_TEXT] = df[COURSE_TEXT].apply(normalize_text)
+
+# %% Keep only students who have taken all obligatory courses (by course code)
+# Use course codes (KURSKODE) for strict matching. Normalize by removing
+# non-digit characters and leading zeros so '01901' and '1901' match.
+required_codes_raw = [
+    "1901","1904","2313","2315","2312","2326","2327","62409","62577","02324","2323","2332","2369","62588","62550","1920","2346","62410","62999"
+]
+
+def clean_code(code: str) -> str:
+    if pd.isna(code):
+        return ""
+    s = re.sub(r"\D", "", str(code))
+    return s.lstrip("0")
+
+required_codes = {clean_code(c) for c in required_codes_raw}
+
+# Add cleaned code column to dataframe
+df["COURSE_CODE_CLEAN"] = df[COURSE_NUMBER].apply(clean_code)
+
+# Group codes per student and keep only students who have all required codes
+codes_by_student = df.groupby(STUDY_NUMBER)["COURSE_CODE_CLEAN"].apply(lambda s: set([x for x in s if x]))
+before_students = df[STUDY_NUMBER].nunique()
+valid_students_codes = codes_by_student[codes_by_student.apply(lambda s: required_codes.issubset(s))].index
+after_students = len(valid_students_codes)
+print(f"Students matching obligatory course codes: {after_students} (from {before_students})")
+df = df[df[STUDY_NUMBER].isin(valid_students_codes)]
 
 # %% Normalize duplicate courses that has the same course text and ECTS but different course numbers
 
@@ -104,8 +119,18 @@ def set_semester_grading_dates(group: pd.DataFrame) -> pd.DataFrame:
     return group
 
 
-df = df.groupby([STUDY_NUMBER, "SEMESTER"]).apply(set_semester_grading_dates)
-df.reset_index(drop=True, inplace=True)
+# Assign `SEMESTER_END` explicitly per (STUDIENR, SEMESTER) group to avoid
+# pandas groupby.apply behavior that can place grouping keys into the index
+# and make columns unavailable for later operations.
+df["SEMESTER_END"] = pd.NA
+for (studnr, sem), grp in df.groupby([STUDY_NUMBER, "SEMESTER"]):
+    year = pd.to_datetime(grp[GRADING_DATE]).dt.year.iloc[0]
+    if "Spring" in sem:
+        new_date = pd.Timestamp(year=year, month=6, day=1)
+    else:
+        new_date = pd.Timestamp(year=year, month=12, day=1)
+
+    df.loc[grp.index, "SEMESTER_END"] = new_date.strftime("%Y-%m-%d")
 
 # %% Add semester start date column
 
@@ -156,37 +181,6 @@ df["SEMESTER_END"] = df["SEMESTER_START"] + pd.to_timedelta(df["ATTEMPT"] * 13 *
 # After aggregation and adjustment, convert semester start/end back to ISO date strings
 df["SEMESTER_START"] = pd.to_datetime(df["SEMESTER_START"]).dt.strftime("%Y-%m-%d")
 df["SEMESTER_END"] = df["SEMESTER_END"].dt.strftime("%Y-%m-%d")
-
-
-# %% Add duration column
-def calculate_duration(row: pd.Series) -> int:
-    start_date = pd.to_datetime(row["SEMESTER_START"], format="%Y-%m-%d")
-    end_date = pd.to_datetime(row["SEMESTER_END"], format="%Y-%m-%d")
-    duration = (end_date - start_date).days
-    return duration
-
-
-df["DURATION_DAYS"] = df.apply(calculate_duration, axis=1)
-
-# %% Reorder columns
-
-desired_order = [
-    STUDY_NUMBER,
-    COURSE_NUMBER,
-    COURSE_TEXT,
-    GRADE,
-    GRADING_SCALE,
-    ECTS,
-    EXAM_FORM,
-    CENSOR,
-    "SEMESTER",
-    "SEMESTER_START",
-    "SEMESTER_END",
-    "DURATION_DAYS",
-    "ATTEMPT",
-]
-df = df[desired_order]
-
 # %% Sort data
 df.sort_values(by=[STUDY_NUMBER, "SEMESTER_END", COURSE_NUMBER], inplace=True)
 
