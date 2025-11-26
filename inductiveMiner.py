@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""
+Inductive Miner for DTU Curricula Process Mining
+
+This script applies the Inductive Miner algorithm to discover a process model
+from DTU student course completion data.
+"""
+
+import pandas as pd
+import pm4py
+from pm4py.algo.discovery.inductive import algorithm as inductive_miner
+from pm4py.objects.conversion.log import converter as log_converter
+from pm4py.objects.conversion.process_tree import converter as pt_converter
+from pm4py.objects.log.util import dataframe_utils
+from pm4py.objects.petri_net.exporter import exporter as pnml_exporter
+from pm4py.visualization.petri_net import visualizer as pn_visualizer
+
+# Constants
+INPUT_PATH = "DTU_Curricula_Data_Filtered.csv"
+OUTPUT_PETRI_NET_PATH = "inductive_miner_petri_net.pnml"
+OUTPUT_VISUALIZATION_PATH = "inductive_miner_model.png"
+
+def load_event_log(file_path: str) -> pd.DataFrame:
+    """Load and prepare the event log from CSV file."""
+    print(f"Loading data from {file_path}...")
+    df = pd.read_csv(file_path)
+    
+    # Display basic statistics
+    print(f"\nDataset Statistics:")
+    print(f"Total events: {len(df)}")
+    print(f"Number of students (cases): {df['STUDIENR'].nunique()}")
+    print(f"Number of unique courses: {df['KURSKODE'].nunique()}")
+    
+    return df
+
+def prepare_event_log(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Prepare the dataframe for PM4Py by renaming columns to standard names.
+    PM4Py expects: case:concept:name, concept:name, time:timestamp
+    """
+    print("\nPreparing event log...")
+    
+    # Create a copy to avoid modifying the original
+    log_df = df.copy()
+    
+    # Rename columns to PM4Py standard format
+    log_df = log_df.rename(columns={
+        'STUDIENR': 'case:concept:name',      # Case ID (student)
+        'KURSTXT': 'concept:name',             # Activity name (course)
+        'SEMESTER_END': 'time:timestamp'       # Timestamp
+    })
+    
+    # Convert timestamp to datetime
+    log_df['time:timestamp'] = pd.to_datetime(log_df['time:timestamp'])
+    
+    # Add additional attributes that might be useful for filtering/analysis
+    log_df['ECTS'] = df['ECTS']
+    log_df['BEDOMMELSE'] = df['BEDOMMELSE']
+    log_df['ATTEMPT'] = df['ATTEMPT']
+    
+    # Sort by case and timestamp
+    log_df = log_df.sort_values(['case:concept:name', 'time:timestamp'])
+    
+    print(f"Event log prepared with {len(log_df)} events")
+    
+    return log_df
+
+def discover_model_inductive(log_df: pd.DataFrame, noise_threshold: float = 0.0):
+    """
+    Apply Inductive Miner algorithm to discover a process model.
+    
+    Parameters:
+    -----------
+    log_df : pd.DataFrame
+        Event log in PM4Py format
+    noise_threshold : float
+        Noise threshold for Inductive Miner (0.0 = no noise filtering, 
+        higher values = more noise filtering, typically 0.0 - 0.5)
+    
+    Returns:
+    --------
+    tuple : (net, initial_marking, final_marking)
+        Petri net model and markings
+    """
+    print(f"\nApplying Inductive Miner (noise_threshold={noise_threshold})...")
+    
+    # Convert dataframe to event log
+    log_df = dataframe_utils.convert_timestamp_columns_in_df(log_df)
+    event_log = log_converter.apply(log_df)
+    
+    # Apply Inductive Miner - returns a process tree
+    process_tree = inductive_miner.apply(
+        event_log,
+        variant=inductive_miner.Variants.IMf,  # IMf is more flexible with noise
+        parameters={'noise_threshold': noise_threshold}
+    )
+    
+    print(f"Process tree discovered successfully!")
+    
+    # Convert process tree to Petri net
+    net, initial_marking, final_marking = pt_converter.apply(process_tree)
+    
+    print(f"Converted to Petri net:")
+    print(f"Number of places: {len(net.places)}")
+    print(f"Number of transitions: {len(net.transitions)}")
+    
+    return net, initial_marking, final_marking
+
+def visualize_model(net, initial_marking, final_marking, output_path: str):
+    """Visualize the discovered Petri net and save to file."""
+    print(f"\nVisualizing model and saving to {output_path}...")
+    
+    try:
+        gviz = pn_visualizer.apply(
+            net, 
+            initial_marking, 
+            final_marking,
+            parameters={pn_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT: "png"}
+        )
+        
+        pn_visualizer.save(gviz, output_path)
+        print(f"Visualization saved successfully!")
+    except Exception as e:
+        print(f"\nWarning: Could not create visualization.")
+        print(f"Error: {e}")
+        print(f"\nTo fix: Install Graphviz from https://graphviz.org/download/")
+        print(f"Or use: choco install graphviz (if you have Chocolatey)")
+
+def export_petri_net(net, initial_marking, final_marking, output_path: str):
+    """Export the Petri net to PNML format."""
+    print(f"\nExporting Petri net to {output_path}...")
+    
+    pnml_exporter.apply(
+        net, 
+        initial_marking, 
+        output_path,
+        final_marking=final_marking
+    )
+    
+    print(f"Petri net exported successfully!")
+
+def main():
+    """Main execution function."""
+    print("=" * 60)
+    print("DTU Curricula - Inductive Miner Process Discovery")
+    print("=" * 60)
+    
+    # Load data
+    df = load_event_log(INPUT_PATH)
+    
+    # Prepare event log
+    log_df = prepare_event_log(df)
+    
+    # Discover model using Inductive Miner
+    # Adjust noise_threshold as needed (0.0 = strict, 0.2 = moderate filtering)
+    net, initial_marking, final_marking = discover_model_inductive(
+        log_df, 
+        noise_threshold=0.0
+    )
+    
+    # Warn about large models
+    if len(net.transitions) > 200:
+        print(f"\nWarning: The model is very large ({len(net.transitions)} transitions).")
+        print("Visualization may take several minutes. Please be patient...")
+    
+    # Visualize and save the model
+    visualize_model(net, initial_marking, final_marking, OUTPUT_VISUALIZATION_PATH)
+    
+    # Export Petri net (this is fast even for large models)
+    export_petri_net(net, initial_marking, final_marking, OUTPUT_PETRI_NET_PATH)
+    
+    print("\n" + "=" * 60)
+    print("Process discovery completed successfully!")
+    print(f"Visualization: {OUTPUT_VISUALIZATION_PATH}")
+    print(f"Petri Net PNML: {OUTPUT_PETRI_NET_PATH}")
+    print("=" * 60)
+
+if __name__ == "__main__":
+    main()
