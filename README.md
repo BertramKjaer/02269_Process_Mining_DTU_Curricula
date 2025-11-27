@@ -5,10 +5,10 @@ This repository contains a reproducible workflow for process mining on DTU curri
 ## Project Structure
 
 ```
-├── alpha.py                # Alpha Miner script
-├── heuristicsMiner.py      # Heuristics Miner script
-├── inductiveMiner.py       # Inductive Miner script
-├── prepare-data.py         # Data cleaning and filtering
+├── alpha_miner.py                # Alpha Miner script
+├── heuristics_miner.py      # Heuristics Miner script
+├── inductive_miner.py       # Inductive Miner script
+├── prepare_data.py         # Data cleaning and filtering
 ├── evaluate_models.py      # Model evaluation and metrics
 ├── DTU_Curricula_Data.csv  # Raw event log (input)
 ├── requirements.txt        # Python dependencies
@@ -20,28 +20,37 @@ This repository contains a reproducible workflow for process mining on DTU curri
 
 1. **Install Python 3.8+** (recommended: use a virtual environment)
 2. **Install dependencies:**
+
    ```powershell
    pip install -r requirements.txt
    ```
+
 3. **Prepare the data:**
+
    ```powershell
-   python prepare-data.py
+   python prepare_data.py
    ```
+
    This creates `DTU_Curricula_Data_Filtered.csv` for mining.
 
 ## Running the Miners
 
 - **Alpha Miner:**
+
   ```powershell
-  python alpha.py
+  python alpha_miner.py
   ```
+
 - **Heuristics Miner:**
+
   ```powershell
-  python heuristicsMiner.py
+  python heuristics_miner.py
   ```
+
 - **Inductive Miner:**
+
   ```powershell
-  python inductiveMiner.py
+  python inductive_miner.py
   ```
 
 All outputs (PNML files, visualizations) are saved in the `outputs/` folder.
@@ -49,9 +58,11 @@ All outputs (PNML files, visualizations) are saved in the `outputs/` folder.
 ## Model Evaluation
 
 To compute metrics (replay fitness, precision, complexity) for all discovered models:
+
 ```powershell
 python evaluate_models.py --sample 10 --top-activities 10 --noise 0.4 --heur-dependency 0.95
 ```
+
 - Results are saved in `outputs/model_metrics.csv` and `outputs/model_summary.md`.
 - You can adjust parameters for sampling, activity filtering, and miner thresholds.
 
