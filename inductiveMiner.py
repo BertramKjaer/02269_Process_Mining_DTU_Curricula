@@ -29,7 +29,7 @@ def load_event_log(file_path: str) -> pd.DataFrame:
     df = pd.read_csv(file_path)
 
     # Display basic statistics
-    print(f"\nDataset Statistics:")
+    print("\nDataset Statistics:")
     print(f"Total events: {len(df)}")
     print(f"Number of students (cases): {df['STUDIENR'].nunique()}")
     print(f"Number of unique courses: {df['KURSKODE'].nunique()}")
@@ -102,12 +102,12 @@ def discover_model_inductive(log_df: pd.DataFrame, noise_threshold: float = 0.0)
         parameters={"noise_threshold": noise_threshold},
     )
 
-    print(f"Process tree discovered successfully!")
+    print("Process tree discovered successfully!")
 
     # Convert process tree to Petri net
     net, initial_marking, final_marking = pt_converter.apply(process_tree)
 
-    print(f"Converted to Petri net:")
+    print("Converted to Petri net:")
     print(f"Number of places: {len(net.places)}")
     print(f"Number of transitions: {len(net.transitions)}")
 

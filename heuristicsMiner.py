@@ -33,7 +33,7 @@ def load_event_log(file_path: str) -> pd.DataFrame:
     df = pd.read_csv(file_path)
 
     # Display basic statistics
-    print(f"\nDataset Statistics:")
+    print("\nDataset Statistics:")
     print(f"Total events: {len(df)}")
     print(f"Number of students (cases): {df['STUDIENR'].nunique()}")
     print(f"Number of unique courses: {df['KURSKODE'].nunique()}")
@@ -102,7 +102,7 @@ def discover_model_heuristics(
     heuristics_net : HeuristicsNet
         Discovered heuristics net model
     """
-    print(f"\nApplying Heuristics Miner...")
+    print("\nApplying Heuristics Miner...")
     print(f"  Dependency threshold: {dependency_threshold}")
     print(f"  AND threshold: {and_threshold}")
     print(f"  Loop-two threshold: {loop_two_threshold}")
@@ -128,7 +128,7 @@ def discover_model_heuristics(
     # else:
     #     heuristics_net = result
 
-    print(f"Heuristics net discovered successfully!")
+    print("Heuristics net discovered successfully!")
 
     return net, initial_marking, final_marking
 
@@ -140,7 +140,7 @@ def convert_and_visualize_petri_net(heuristics_net, output_path: str):
     # Convert heuristics net to Petri net
     net, initial_marking, final_marking = hn_converter.apply(heuristics_net)
 
-    print(f"Petri net conversion completed:")
+    print("Petri net conversion completed:")
     print(f"  Places: {len(net.places)}")
     print(f"  Transitions: {len(net.transitions)}")
 
@@ -154,12 +154,12 @@ def convert_and_visualize_petri_net(heuristics_net, output_path: str):
         )
 
         pn_visualizer.save(gviz, output_path)
-        print(f"Petri net visualization saved successfully!")
+        print("Petri net visualization saved successfully!")
     except Exception as e:
-        print(f"\nWarning: Could not create Petri net visualization.")
+        print("\nWarning: Could not create Petri net visualization.")
         print(f"Error: {e}")
-        print(f"\nTo fix: Install Graphviz from https://graphviz.org/download/")
-        print(f"Or use: choco install graphviz (if you have Chocolatey)")
+        print("\nTo fix: Install Graphviz from https://graphviz.org/download/")
+        print("Or use: choco install graphviz (if you have Chocolatey)")
 
     return net, initial_marking, final_marking
 
