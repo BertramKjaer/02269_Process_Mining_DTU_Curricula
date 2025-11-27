@@ -45,14 +45,34 @@ df[COURSE_TEXT] = df[COURSE_TEXT].apply(normalize_text)
 # Use course codes (KURSKODE) for strict matching. Normalize by removing
 # non-digit characters and leading zeros so '01901' and '1901' match.
 required_codes_raw = [
-    "1901","1904","2313","2315","2312","2326","2327","62409","62577","02324","2323","2332","2369","62588","62550","1920","2346","62410","62999"
+    "1901",
+    "1904",
+    "2313",
+    "2315",
+    "2312",
+    "2326",
+    "2327",
+    "62409",
+    "62577",
+    "02324",
+    "2323",
+    "2332",
+    "2369",
+    "62588",
+    "62550",
+    "1920",
+    "2346",
+    "62410",
+    "62999",
 ]
+
 
 def clean_code(code: str) -> str:
     if pd.isna(code):
         return ""
     s = re.sub(r"\D", "", str(code))
     return s.lstrip("0")
+
 
 required_codes = {clean_code(c) for c in required_codes_raw}
 
@@ -106,83 +126,52 @@ def get_semester(value: str) -> str:
 df["SEMESTER"] = df[GRADING_DATE].apply(get_semester)
 
 
-# %% Set the grading date of courses in the same semester to the same date
-def set_semester_grading_dates(group: pd.DataFrame) -> pd.DataFrame:
-    semester = group["SEMESTER"].iloc[0]
-    year = pd.to_datetime(group[GRADING_DATE]).dt.year
-    if "Spring" in semester:
-        new_date = pd.Timestamp(year=year.iloc[0], month=6, day=1)
-    else:
-        new_date = pd.Timestamp(year=year.iloc[0], month=12, day=1)
-
-    group["SEMESTER_END"] = new_date.strftime("%Y-%m-%d")
-    return group
-
-
-# Assign `SEMESTER_END` explicitly per (STUDIENR, SEMESTER) group to avoid
-# pandas groupby.apply behavior that can place grouping keys into the index
-# and make columns unavailable for later operations.
-df["SEMESTER_END"] = pd.NA
-for (studnr, sem), grp in df.groupby([STUDY_NUMBER, "SEMESTER"]):
-    year = pd.to_datetime(grp[GRADING_DATE]).dt.year.iloc[0]
-    if "Spring" in sem:
-        new_date = pd.Timestamp(year=year, month=6, day=1)
-    else:
-        new_date = pd.Timestamp(year=year, month=12, day=1)
-
-    df.loc[grp.index, "SEMESTER_END"] = new_date.strftime("%Y-%m-%d")
-
-# %% Add semester start date column
-
-
-def get_semester_start(value: str) -> str:
-    date = pd.to_datetime(value, format="%Y-%m-%d")
-    if date.month == 6:
-        start_date = pd.Timestamp(year=date.year, month=2, day=1)
-    else:
-        start_date = pd.Timestamp(year=date.year, month=8, day=1)
-    return start_date.strftime("%Y-%m-%d")
-
-
-df["SEMESTER_START"] = df["SEMESTER_END"].apply(get_semester_start)
-
-
 # %% Add attempt counter column
-
+df = df.sort_values(by=[STUDY_NUMBER, GRADING_DATE])
 df["ATTEMPT"] = df.groupby([STUDY_NUMBER, COURSE_NUMBER]).cumcount() + 1
 
 
-# %% Combine courses with attempts into single rows with adjusted end dates based on number of attempts
-# Convert semester start/end to datetime so min/max aggregation is chronological
-df["SEMESTER_START"] = pd.to_datetime(df["SEMESTER_START"], format="%Y-%m-%d")
-df["SEMESTER_END"] = pd.to_datetime(df["SEMESTER_END"], format="%Y-%m-%d")
+# %% Combine courses with attempts into single rows using actual grading dates
+# Convert grading date to datetime so min/max aggregation is chronological
+df[GRADING_DATE] = pd.to_datetime(df[GRADING_DATE], format="%Y-%m-%d")
+
+df["FIRST_GRADING_DATE"] = df[GRADING_DATE]
+df["LAST_GRADING_DATE"] = df[GRADING_DATE]
 
 aggregation_functions = {
     COURSE_TEXT: "first",
     GRADE: "last",
-    GRADING_SCALE: "first",
+    GRADING_SCALE: "last",
     ECTS: "first",
-    EXAM_FORM: "first",
-    CENSOR: "first",
+    EXAM_FORM: "last",
+    CENSOR: "last",
     # Keep semester listing as joined string; ordering depends on original row order
     "SEMESTER": lambda x: ", ".join(x),
-    # Use min/max on datetimes so start is earliest and end is latest
-    "SEMESTER_START": "min",
-    "SEMESTER_END": "max",
+    # Use min/max on grading dates - for single attempts, both will be the same
+    "FIRST_GRADING_DATE": "min",
+    "LAST_GRADING_DATE": "max",
     # ATTEMPT should reflect the highest attempt number
     "ATTEMPT": "max",
 }
 
 df = df.groupby([STUDY_NUMBER, COURSE_NUMBER], as_index=False).agg(aggregation_functions)
 
-# Calculate end date based on semester start and number of attempts (one semester is 13 weeks)
-df["SEMESTER_END"] = df["SEMESTER_START"] + pd.to_timedelta(df["ATTEMPT"] * 13 * 7, unit="days")
+# && Select and reorder columns
+df = df[
+    [
+        STUDY_NUMBER,
+        COURSE_NUMBER,
+        COURSE_TEXT,
+        GRADE,
+        "ATTEMPT",
+        "SEMESTER",
+        "FIRST_GRADING_DATE",
+        "LAST_GRADING_DATE",
+    ]
+]
 
-# After aggregation and adjustment, convert semester start/end back to ISO date strings
-df["SEMESTER_START"] = pd.to_datetime(df["SEMESTER_START"]).dt.strftime("%Y-%m-%d")
-df["SEMESTER_END"] = df["SEMESTER_END"].dt.strftime("%Y-%m-%d")
 # %% Sort data
-df.sort_values(by=[STUDY_NUMBER, "SEMESTER_END", COURSE_NUMBER], inplace=True)
+df.sort_values(by=[STUDY_NUMBER, "LAST_GRADING_DATE", COURSE_NUMBER], inplace=True)
 
 # %% Export data
 df.to_csv(OUTPUT_PATH, index=False)
