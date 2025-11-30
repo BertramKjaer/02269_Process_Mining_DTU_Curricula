@@ -144,7 +144,6 @@ df = df[
         STUDY_NUMBER,
         COURSE_NUMBER,
         COURSE_TEXT,
-        "PASSED",
         GRADE,
         "ATTEMPT",
         "COURSE_START",
