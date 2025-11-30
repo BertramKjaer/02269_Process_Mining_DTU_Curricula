@@ -62,10 +62,6 @@ python evaluate_models.py --sample 10 --top-activities 10 --noise 0.4 --heur-dep
 
 ## Troubleshooting
 
-- If metrics are missing, ensure initial/final markings are set (handled automatically in scripts).
+- If metrics are missing, ensure initial/final markings are set.
 - For pm4py errors, check your installed version matches `requirements.txt`.
 - For large logs, use sampling and activity filtering to reduce runtime.
-
-## License
-
-This project is for educational use at DTU. See individual scripts for author credits.
